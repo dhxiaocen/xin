@@ -2439,8 +2439,9 @@ function isDuplicateInGroup(candidate, existingNotes) {
   return false;
 }
 
-function generateNotesFromPool(pool, noteCount) {
+function generateNotesFromPool(pool, noteCount, posVariantFilter) {
   if (pool.length === 0) return [];
+  if (!posVariantFilter) posVariantFilter = buildPosVariantFilter();
 
   // 人工选号：和五码五注的 pickHumanLike 逻辑一致
   // 1. 随机选第一注
@@ -2487,15 +2488,15 @@ function generateNotesFromPool(pool, noteCount) {
     candidates.splice(pos, 1);
   }
 
-  return reorderCodesHumanLike(picked);
+  // 链式排号（位置优先），与手动录入五注统一效果
+  return arrangeByChain(picked, null, posVariantFilter);
 }
-
-// 格式三生成
 function generateFormat3Results() {
   const wumaCount = parseInt(document.getElementById('fmt3WumaCount').value) || 0;
   const fourCount = parseInt(document.getElementById('fmt3FourCount').value) || 0;
   const threeCount = parseInt(document.getElementById('fmt3ThreeCount').value) || 0;
   const twoCount = parseInt(document.getElementById('fmt3TwoCount').value) || 0;
+  const posVariantFilter = buildPosVariantFilter();
 
   // 收集手动录入项
   const manualList = [];
@@ -2802,10 +2803,10 @@ function generateFormat3Results() {
       for (let attempt = 0; attempt < 50; attempt++) {
         const candidate = generateQualifiedSource(generatedSources, 4);
         if (!candidate) continue;
-        const baseNotes = generateNotesFromPool(candidate.pool, 4);
+        const baseNotes = generateNotesFromPool(candidate.pool, 4, posVariantFilter);
         // 组间号码相似度检查：只用池内正常选出的注判定，补齐的注不参与否决
         if (!notesTooSimilar(baseNotes, generatedGroups, 2)) {
-          sourceData = { ...candidate, notes: fillNotesToCount(candidate.source, baseNotes, 4) };
+          sourceData = { ...candidate, notes: arrangeByChain(fillNotesToCount(candidate.source, baseNotes, 4), null, posVariantFilter) };
           break;
         }
       }
@@ -2813,7 +2814,7 @@ function generateFormat3Results() {
       if (!sourceData) {
         const candidate = generateQualifiedSource(generatedSources, 4);
         if (candidate) {
-          sourceData = { ...candidate, notes: fillNotesToCount(candidate.source, generateNotesFromPool(candidate.pool, 4), 4) };
+          sourceData = { ...candidate, notes: arrangeByChain(fillNotesToCount(candidate.source, generateNotesFromPool(candidate.pool, 4, posVariantFilter), 4), null, posVariantFilter) };
         }
       }
       if (!sourceData) continue;
@@ -2837,17 +2838,17 @@ function generateFormat3Results() {
       for (let attempt = 0; attempt < 50; attempt++) {
         const candidate = generateQualifiedSource(generatedSources, 3);
         if (!candidate) continue;
-        const baseNotes = generateNotesFromPool(candidate.pool, 3);
+        const baseNotes = generateNotesFromPool(candidate.pool, 3, posVariantFilter);
         // 补齐的注不参与相似度否决
         if (!notesTooSimilar(baseNotes, generatedGroups, 2)) {
-          sourceData = { ...candidate, notes: fillNotesToCount(candidate.source, baseNotes, 3) };
+          sourceData = { ...candidate, notes: arrangeByChain(fillNotesToCount(candidate.source, baseNotes, 3), null, posVariantFilter) };
           break;
         }
       }
       if (!sourceData) {
         const candidate = generateQualifiedSource(generatedSources, 3);
         if (candidate) {
-          sourceData = { ...candidate, notes: fillNotesToCount(candidate.source, generateNotesFromPool(candidate.pool, 3), 3) };
+          sourceData = { ...candidate, notes: arrangeByChain(fillNotesToCount(candidate.source, generateNotesFromPool(candidate.pool, 3, posVariantFilter), 3), null, posVariantFilter) };
         }
       }
       if (!sourceData) continue;
@@ -2871,17 +2872,17 @@ function generateFormat3Results() {
       for (let attempt = 0; attempt < 50; attempt++) {
         const candidate = generateQualifiedSource(generatedSources, 2);
         if (!candidate) continue;
-        const baseNotes = generateNotesFromPool(candidate.pool, 2);
+        const baseNotes = generateNotesFromPool(candidate.pool, 2, posVariantFilter);
         // 两注只有2注，阈值取2：两注全部重复才算太相似（原为1，过严）
         if (!notesTooSimilar(baseNotes, generatedGroups, 2)) {
-          sourceData = { ...candidate, notes: fillNotesToCount(candidate.source, baseNotes, 2) };
+          sourceData = { ...candidate, notes: arrangeByChain(fillNotesToCount(candidate.source, baseNotes, 2), null, posVariantFilter) };
           break;
         }
       }
       if (!sourceData) {
         const candidate = generateQualifiedSource(generatedSources, 2);
         if (candidate) {
-          sourceData = { ...candidate, notes: fillNotesToCount(candidate.source, generateNotesFromPool(candidate.pool, 2), 2) };
+          sourceData = { ...candidate, notes: arrangeByChain(fillNotesToCount(candidate.source, generateNotesFromPool(candidate.pool, 2, posVariantFilter), 2), null, posVariantFilter) };
         }
       }
       if (!sourceData) continue;
