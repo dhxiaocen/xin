@@ -658,6 +658,26 @@ h1 {
   margin-bottom: 12px;
 }
 
+.btn-clear-conds {
+  font-size: 12px;
+  padding: 4px 10px;
+  color: #fff;
+  background: #1890ff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-clear-conds:hover {
+  background: #40a9ff;
+}
+
+.btn-clear-conds:active {
+  background: #096dd9;
+}
+
 .result-count {
   font-size: 14px;
   color: #666;
@@ -1188,9 +1208,11 @@ h1 {
   <div class="section">
     <div class="result-header" onclick="toggleFilterSection()" style="cursor:pointer;">
       <div class="section-title" style="margin-bottom: 0;"><span id="filterSectionArrow">▼</span> 筛选条件</div>
+      <button class="btn-clear-conds" onclick="event.stopPropagation(); clearAllConditions();">清空条件1-6</button>
     </div>
     <div id="filterContent">
-      <div class="filter-subtitle">开关设置</div>
+      <div class="filter-subtitle" style="cursor:pointer;user-select:none;" onclick="toggleCondition('switchContent', 'switchContentArrow')"><span><span id="switchContentArrow">▼</span> 开关设置</span></div>
+      <div id="switchContent">
       <div class="switch-row">
         <span class="switch-label-text">随机五码 适用筛选条件</span>
         <label class="toggle-switch">
@@ -1227,6 +1249,7 @@ h1 {
           <option value="3">格式三（混合注数）</option>
         </select>
       </div>
+      </div>
       <div id="format3Settings" style="display:none;padding:12px;background:#f8f9fb;border-radius:8px;margin-top:8px;">
         <div style="font-size:13px;color:#666;margin-bottom:8px;">设置各类注数组数</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -1249,7 +1272,7 @@ h1 {
         </div>
       </div>
 
-      <div class="filter-subtitle" style="cursor:pointer;user-select:none;" onclick="toggleCondition('cond1', 'cond1Arrow')"><span><span id="cond1Arrow">▼</span> 条件1 胆码</span></div>
+      <div class="filter-subtitle" style="margin-top: 16px;cursor:pointer;user-select:none;" onclick="toggleCondition('cond1', 'cond1Arrow')"><span><span id="cond1Arrow">▼</span> 条件1 胆码</span></div>
       <div id="cond1">
         <div class="digit-label">选择胆</div>
         <div class="digit-picker" id="danmaPicker"></div>
@@ -1499,6 +1522,23 @@ function setSelectedDigits(containerId, digits) {
       btn.classList.remove('active');
     }
   });
+}
+
+// 一键清空条件1~6（胆码、和尾、断组、容错、杀号），不影响开关设置与条件7
+function clearAllConditions() {
+  setSelectedDigits('danmaPicker', []);
+  setSelectedDigits('danmaCountPicker', []);
+  setSelectedDigits('hezhiPicker', []);
+  setSelectedDigits('excludeBaiPicker', []);
+  setSelectedDigits('excludeShiPicker', []);
+  setSelectedDigits('excludeGePicker', []);
+  document.getElementById('duanzuList').innerHTML = '';
+  document.getElementById('rongcuoList').innerHTML = '';
+  document.getElementById('rongcuo2List').innerHTML = '';
+  duanzuCount = 0;
+  rongcuoCount = 0;
+  rongcuo2Count = 0;
+  saveConfig();
 }
 
 function addDuanzu(p1 = '', p2 = '', p3 = '', toFront = false) {
@@ -3693,9 +3733,12 @@ function sortSourceAsc(source) {
   return source.split('').sort().join('');
 }
 
-function renderFormat3Results(results) {
+function renderFormat3Results(results, skipHistory) {
   const content = document.getElementById('resultContent');
   const countEl = document.getElementById('resultCount');
+
+  window._currentResultView = 'fmt3';
+  window.currentFmt3Results = results;
 
   countEl.textContent = '共 ' + results.length + ' 条';
 
@@ -3713,9 +3756,11 @@ function renderFormat3Results(results) {
     results: [...results],
     outputFormat: outputFormat
   };
-  history.unshift(record);
-  if (history.length > 100) history.pop();
-  saveHistory(history);
+  if (!skipHistory) {
+    history.unshift(record);
+    if (history.length > 100) history.pop();
+    saveHistory(history);
+  }
 
   let html = '';
 
@@ -3858,6 +3903,8 @@ function copyAllFmt3() {
 function renderResults(results) {
   const content = document.getElementById('resultContent');
   const countEl = document.getElementById('resultCount');
+
+  window._currentResultView = 'fmt12';
 
   countEl.textContent = '共 ' + results.length + ' 条';
 
@@ -5074,7 +5121,10 @@ function copyFmt3HistoryLine(recordId, serial) {
   });
 }
 
+let appInitializing = true;
+
 function saveConfig() {
+  if (appInitializing) return;
   const config = {
     manualItems: [],
     randomCount: document.getElementById('randomCount').value,
@@ -5143,7 +5193,16 @@ function saveConfig() {
     }
   }
 
-  if (window._lastResults && window._lastResults.length > 0) {
+  // 只持久化当前展示的结果类型，避免重开后还原成过期的旧结果
+  const view = window._currentResultView || 'fmt12';
+  config.viewType = view;
+  if (view === 'dm') {
+    if (dmLastResults.length > 0) config.dm.results = JSON.parse(JSON.stringify(dmLastResults));
+  } else if (view === 'fmt3') {
+    if (window.currentFmt3Results && window.currentFmt3Results.length > 0) {
+      config.fmt3Results = JSON.parse(JSON.stringify(window.currentFmt3Results));
+    }
+  } else if (window._lastResults && window._lastResults.length > 0) {
     config.results = JSON.parse(JSON.stringify(window._lastResults));
   }
 
@@ -5216,12 +5275,17 @@ function loadConfig() {
       document.getElementById('straightSimilarityValue').textContent = config.straightSimilarity + '%';
     }
 
-    if (config.results && config.results.length > 0) {
+    // 按上次展示的结果类型恢复，避免还原成别的旧结果
+    const savedView = config.viewType || 'fmt12';
+    if (savedView === 'dm' && config.dm && config.dm.results && config.dm.results.length > 0) {
+      dmLastResults = JSON.parse(JSON.stringify(config.dm.results));
+      renderDmResults(dmLastResults);
+    } else if (savedView === 'fmt3' && config.fmt3Results && config.fmt3Results.length > 0) {
+      renderFormat3Results(JSON.parse(JSON.stringify(config.fmt3Results)), true);
+    } else if (config.results && config.results.length > 0) {
       window._lastResults = JSON.parse(JSON.stringify(config.results));
-      // 根据DM模式状态选择正确的渲染器
-      if (config.dm && config.dm.enable) {
-        // DM模式：结果可能已保存为dmLastResults，不在此渲染非DM结果
-      } else {
+      // DM模式下不渲染非DM结果
+      if (!(config.dm && config.dm.enable)) {
         renderResults(window._lastResults);
       }
     }
@@ -5413,6 +5477,8 @@ function init() {
   }
 
   loadConfig();
+  // 初始化期间禁止写配置，避免把刚恢复的结果清空
+  appInitializing = false;
 
   // 修复旧配置：如果格式三的所有值都是0，重置为默认值
   const wumaVal = parseInt(document.getElementById('fmt3WumaCount').value) || 0;
@@ -5446,7 +5512,7 @@ function init() {
   }
 
   // 恢复各条件折叠状态
-  for (const condId of ['cond1', 'cond2', 'cond3', 'cond4', 'cond5', 'cond6', 'cond7']) {
+  for (const condId of ['switchContent', 'cond1', 'cond2', 'cond3', 'cond4', 'cond5', 'cond6', 'cond7']) {
     const condExpanded = localStorage.getItem(condId + '_expanded');
     if (condExpanded === '0') {
       document.getElementById(condId).style.display = 'none';
@@ -5477,6 +5543,9 @@ function init() {
     document.getElementById('similarityContent').style.display = 'none';
     document.getElementById('similaritySectionArrow').textContent = '▶';
   }
+
+  // 回写一次，确保恢复的结果真正落盘
+  saveConfig();
 }
 
 // === 数据修改模块 ===
@@ -6659,6 +6728,8 @@ function generateDataModification() {
 function renderDmResults(results) {
   const content = document.getElementById('resultContent');
   const countEl = document.getElementById('resultCount');
+
+  window._currentResultView = 'dm';
 
   countEl.textContent = '共 ' + results.length + ' 条';
 
